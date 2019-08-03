@@ -1,10 +1,10 @@
 // Manual implementation of the Rust object API.
-// For learning and eventual testing purposes. 
-
+// For learning and eventual testing purposes.
 
 // flatbuffer-enums and flatbuffer-structs can share types with the builder
 // api but tables and unions need to be generated to remove WOffset stuff.
 use crate::monster_generated::my_game::sample::Color;
+use crate::monster_generated::my_game::sample::Monster;
 use crate::monster_generated::my_game::sample::Vec3;
 use flatbuffers;
 
@@ -46,11 +46,11 @@ impl Default for MonsterT {
     }
 }
 
-impl MonsterT {
-  pub fn pack(self, fbb: &mut flatbuffers::FlatBufferBuilder) {
-      unimplemented!()
-  }
-  pub fn unpack(fbb: &flatbuffers::FlatBufferBuilder) {
-      unimplemented!()
-  }
+impl<'a> Monster<'a> {
+    pub fn unpack(&self) -> MonsterT {
+        unimplemented!()
+    }
+    pub fn pack(&mut self, m: &MonsterT) {
+        unimplemented!()
+    }
 }
