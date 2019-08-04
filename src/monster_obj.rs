@@ -1,8 +1,5 @@
 // Manual implementation of the Rust object API.
 // For learning and eventual testing purposes.
-
-// flatbuffer-enums can share types with the builder, maybe. Tables and unions need to be
-// generated to remove WOffset stuff. Even structs because of endianness
 use crate::monster_generated::my_game::sample::Color;
 use crate::monster_generated::my_game::sample::Equipment;
 use crate::monster_generated::my_game::sample::Monster;
@@ -11,10 +8,30 @@ use crate::monster_generated::my_game::sample::Vec3;
 use crate::monster_generated::my_game::sample::Weapon;
 use crate::monster_generated::my_game::sample::WeaponBuilder;
 
+// This can work with Vec3 but its less ergonomic.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Vec3T {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+impl Vec3 {
+    pub fn unpack(&self) -> Vec3T {
+        Vec3T{ x: self.x(), y: self.y(), z: self.z() }
+    }
+}
+impl Vec3T {
+    // This pack doesn' take an FBB because struct.
+    pub fn pack(&self) -> Vec3 {
+        Vec3::new(self.x, self.y, self.z)
+    }
+}
+
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeaponT {
-    name: String,
-    damage: i16,
+    pub name: String,
+    pub damage: i16,
 }
 impl WeaponT {
     pub fn pack<'bldr: 'mut_bldr, 'mut_bldr>(
@@ -35,6 +52,14 @@ impl WeaponT {
         builder.finish()
     }
 }
+impl<'a> Weapon<'a> {
+    pub fn unpack(&self) -> WeaponT {
+        WeaponT {
+            name: self.name().unwrap_or("").to_string(),
+            damage: self.damage(),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EquipmentT {
@@ -49,7 +74,7 @@ impl Default for EquipmentT {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MonsterT {
-    pub pos: Option<Vec3>,
+    pub pos: Option<Vec3T>,
     pub mana: i16,
     pub hp: i16,
     pub name: String,
@@ -57,9 +82,8 @@ pub struct MonsterT {
     pub color: Color,
     pub weapons: Vec<WeaponT>,
     pub equipped: EquipmentT,
-    pub path: Vec<Vec3>,
+    pub path: Vec<Vec3T>,
 }
-
 impl Default for MonsterT {
     fn default() -> Self {
         MonsterT {
@@ -98,17 +122,21 @@ impl MonsterT {
         };
         let (equipped_type, equipped) = match &self.equipped {
             EquipmentT::NONE => (Equipment::NONE, None),
-            EquipmentT::Weapon(w) => (Equipment::Weapon, Some(w.pack(fbb).as_union_value())),
+            EquipmentT::Weapon(w) => (
+                Equipment::Weapon,
+                Some(w.pack(fbb).as_union_value()),
+            ),
         };
         let path = if self.path.is_empty() {
             None
         } else {
-            Some(fbb.create_vector(&self.path))
+            let ps: Vec<_> = self.path.iter().map(|p| p.pack()).collect();
+            Some(fbb.create_vector(&ps))
         };
         Monster::create(
             fbb,
             &MonsterArgs {
-                pos: self.pos.as_ref(),
+                pos: self.pos.as_ref().map(|p| p.pack()).as_ref(),
                 hp: self.hp,
                 mana: self.mana,
                 name,
@@ -122,22 +150,11 @@ impl MonsterT {
         )
     }
 }
-
-impl<'a> Weapon<'a> {
-    pub fn unpack(&self) -> WeaponT {
-        WeaponT {
-            name: self.name().unwrap_or("").to_string(),
-            damage: self.damage(),
-        }
-    }
-}
-
 impl<'a> Monster<'a> {
-    // TODO: Resolver nonsense?
     pub fn unpack(&self) -> MonsterT {
         MonsterT {
-            pos: self.pos().cloned(), // Stuct => copy
-            mana: self.mana(),        // scalars can be copied.
+            pos: self.pos().map(|p| p.unpack()), // Stuct => copy
+            mana: self.mana(),                  // scalars can be copied.
             hp: self.hp(),
             name: self.name().unwrap_or("").to_string(), // Unwrap options for string / vector
             inventory: self.inventory().unwrap_or(&[]).to_vec(),
@@ -156,7 +173,7 @@ impl<'a> Monster<'a> {
                 }
             },
             // Vector of structs are just cloned.
-            path: self.path().unwrap_or(&[]).to_vec(),
+            path: self.path().unwrap_or(&[]).iter().map(|p| p.unpack()).collect(),
         }
     }
 }

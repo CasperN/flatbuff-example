@@ -1,5 +1,3 @@
-#![feature(dbg_macro)]
-
 extern crate flatbuffers;
 
 mod monster_generated;
@@ -63,6 +61,7 @@ fn main() {
     // Test unpack then repack yields the same MonsterT.
     let mut x = monster.unpack();
     x.hp += 4;
+    x.pos.as_mut().unwrap().x += 1.0;
 
     let mut builder = flatbuffers::FlatBufferBuilder::new();
     let offset = x.pack(&mut builder);
